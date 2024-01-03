@@ -14,6 +14,7 @@ from typing import MutableMapping
 from typing import NamedTuple
 from typing import Optional
 from typing import overload
+from typing import Pattern
 from typing import Sequence
 from typing import Set
 from typing import Tuple
@@ -465,6 +466,7 @@ if TYPE_CHECKING:
                 None, Type[BaseException], Tuple[Type[BaseException], ...]
             ] = ...,
             strict: bool = ...,
+            match: Union[None, str, Pattern[str]] = ...,
         ) -> MarkDecorator:
             ...
 

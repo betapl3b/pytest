@@ -7,8 +7,10 @@ import traceback
 from collections.abc import Mapping
 from typing import Generator
 from typing import Optional
+from typing import Pattern
 from typing import Tuple
 from typing import Type
+from typing import Union
 
 from _pytest.config import Config
 from _pytest.config import hookimpl
@@ -196,12 +198,13 @@ def evaluate_skip_marks(item: Item) -> Optional[Skip]:
 class Xfail:
     """The result of evaluate_xfail_marks()."""
 
-    __slots__ = ("reason", "run", "strict", "raises")
+    __slots__ = ("reason", "run", "strict", "raises", "match")
 
     reason: str
     run: bool
     strict: bool
     raises: Optional[Tuple[Type[BaseException], ...]]
+    match: Optional[Union[str, Pattern[str]]]
 
 
 def evaluate_xfail_marks(item: Item) -> Optional[Xfail]:
@@ -210,6 +213,7 @@ def evaluate_xfail_marks(item: Item) -> Optional[Xfail]:
         run = mark.kwargs.get("run", True)
         strict = mark.kwargs.get("strict", item.config.getini("xfail_strict"))
         raises = mark.kwargs.get("raises", None)
+        match = mark.kwargs.get("match", None)
         if "condition" not in mark.kwargs:
             conditions = mark.args
         else:
@@ -218,13 +222,13 @@ def evaluate_xfail_marks(item: Item) -> Optional[Xfail]:
         # Unconditional.
         if not conditions:
             reason = mark.kwargs.get("reason", "")
-            return Xfail(reason, run, strict, raises)
+            return Xfail(reason, run, strict, raises, match)
 
         # If any of the conditions are true.
         for condition in conditions:
             result, reason = evaluate_condition(item, mark, condition)
             if result:
-                return Xfail(reason, run, strict, raises)
+                return Xfail(reason, run, strict, raises, match)
 
     return None
 
@@ -277,7 +281,19 @@ def pytest_runtest_makereport(
     elif not rep.skipped and xfailed:
         if call.excinfo:
             raises = xfailed.raises
-            if raises is not None and not isinstance(call.excinfo.value, raises):
+            match_expr = xfailed.match
+            try:
+                excinfo_match = (
+                    call.excinfo.match(match_expr) if match_expr is not None else True
+                )
+            except AssertionError:
+                excinfo_match = False
+            if any(
+                [
+                    raises is not None and not isinstance(call.excinfo.value, raises),
+                    not excinfo_match,
+                ]
+            ):
                 rep.outcome = "failed"
             else:
                 rep.outcome = "skipped"

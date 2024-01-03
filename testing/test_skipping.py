@@ -738,6 +738,70 @@ class TestXFail:
         res.stdout.fnmatch_lines(["*1 failed*"])
         res.stdout.fnmatch_lines(["*1 xfailed*"])
 
+    @pytest.mark.parametrize(
+        "expected, actual, matchline",
+        [
+            ('"Some error"', "Some error", "*1 xfailed*"),
+            ('"Some error"', "Other error", "*1 failed*"),
+            ('r"So.e\\s\\w+"', "Some error", "*1 xfailed*"),
+            ('r"So.e\\s\\w+"', "Other error", "*1 failed*"),
+        ],
+    )
+    def test_xfail_match(self, expected, actual, matchline, pytester: Pytester) -> None:
+        p = pytester.makepyfile(
+            """
+            import pytest
+            @pytest.mark.xfail(match=%s)
+            def test_match():
+                raise Exception("%s")
+        """
+            % (expected, actual)
+        )
+        result = pytester.runpytest(p)
+        result.stdout.fnmatch_lines([matchline])
+
+    @pytest.mark.parametrize(
+        "expected_raises, actual_raises, expected_match, actual_message, matchline",
+        [
+            (
+                "AssertionError",
+                "AssertionError",
+                '"Some error"',
+                "Some error",
+                "*1 xfailed*",
+            ),
+            ("AssertionError", "KeyError", '"Some error"', "Some error", "*1 failed*"),
+            (
+                "AssertionError",
+                "AssertionError",
+                '"Some error"',
+                "Other error",
+                "*1 failed*",
+            ),
+            ("AssertionError", "KeyError", '"Some error"', "Other error", "*1 failed*"),
+        ],
+    )
+    def test_xfail_raises_with_match(
+        self,
+        expected_raises,
+        actual_raises,
+        expected_match,
+        actual_message,
+        matchline,
+        pytester: Pytester,
+    ) -> None:
+        p = pytester.makepyfile(
+            """
+            import pytest
+            @pytest.mark.xfail(raises=%s, match=%s)
+            def test_match():
+                raise %s("%s")
+        """
+            % (expected_raises, expected_match, actual_raises, actual_message)
+        )
+        result = pytester.runpytest(p)
+        result.stdout.fnmatch_lines([matchline])
+
 
 class TestXFailwithSetupTeardown:
     def test_failing_setup_issue9(self, pytester: Pytester) -> None:
